@@ -35,10 +35,8 @@ fi
 echo "Starting container with project: $PROJECT_DIR"
 docker run -it --rm \
   --name claude-dev-container \
-  --cap-add=NET_ADMIN \
-  --cap-add=NET_RAW \
   -v "$PROJECT_DIR:/workspace" \
-  -v "$HOME/.claude:/home/node/.claude" \
+  -v "$HOME/.claude:/home/node/.claude:ro" \
   -v "$HOME/.claude.json:/home/node/.claude.json" \
   -v "$HOME/.claude.json.backup:/home/node/.claude.json.backup" \
   -v "$HOME/.ssh:/home/node/.ssh:ro" \
@@ -48,5 +46,5 @@ docker run -it --rm \
   -e POWERLEVEL9K_DISABLE_GITSTATUS=true \
   -w /workspace \
   $IMAGE_NAME \
-  /bin/zsh #    -e CLAUDE_CONFIG_DIR=/home/node/.claude \
+  /bin/zsh
 
