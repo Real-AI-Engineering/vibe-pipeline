@@ -1,0 +1,7 @@
+{
+  "name": "Go CI Pipeline",
+  "description": "Complete CI/CD pipeline for Go projects with linting, security scanning, testing, and multi-platform building",
+  "iconName": "go",
+  "categories": ["Go", "CI", "Testing", "Security"],
+  "filePatterns": ["**/*.go", "go.mod", "go.sum"]
+}

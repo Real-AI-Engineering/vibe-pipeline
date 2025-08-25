@@ -1,0 +1,7 @@
+{
+  "name": "Claude Code Integration",
+  "description": "Integrate Claude Code AI assistant for automated code reviews and assistance via GitHub comments",
+  "iconName": "ai",
+  "categories": ["AI", "Code Review", "Automation"],
+  "filePatterns": []
+}

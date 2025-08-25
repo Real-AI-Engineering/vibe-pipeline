@@ -1,0 +1,138 @@
+name: 'Setup Node.js Environment'
+description: 'Setup Node.js with package manager caching and common development tools'
+author: 'Real AI Engineering'
+
+inputs:
+  node-version:
+    description: 'Node.js version to setup'
+    required: false
+    default: '20'
+  package-manager:
+    description: 'Package manager to use (npm, yarn, pnpm)'
+    required: false
+    default: 'npm'
+  cache-key-suffix:
+    description: 'Additional suffix for cache key'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory for Node.js setup'
+    required: false
+    default: '.'
+  install-dev-deps:
+    description: 'Install development dependencies'
+    required: false
+    default: 'true'
+
+outputs:
+  node-version:
+    description: 'The exact Node.js version that was installed'
+    value: ${{ steps.setup-node.outputs.node-version }}
+  cache-hit:
+    description: 'Whether package manager cache was hit'
+    value: ${{ steps.node-cache.outputs.cache-hit }}
+  package-manager:
+    description: 'The package manager that was detected/used'
+    value: ${{ steps.detect-pm.outputs.package-manager }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect package manager
+      id: detect-pm
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ "${{ inputs.package-manager }}" != "npm" ]; then
+          echo "package-manager=${{ inputs.package-manager }}" >> $GITHUB_OUTPUT
+        elif [ -f "yarn.lock" ]; then
+          echo "package-manager=yarn" >> $GITHUB_OUTPUT
+        elif [ -f "pnpm-lock.yaml" ]; then
+          echo "package-manager=pnpm" >> $GITHUB_OUTPUT
+        else
+          echo "package-manager=npm" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Setup Node.js ${{ inputs.node-version }}
+      id: setup-node
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ steps.detect-pm.outputs.package-manager }}
+        cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+
+    - name: Setup pnpm
+      if: steps.detect-pm.outputs.package-manager == 'pnpm'
+      uses: pnpm/action-setup@v3
+      with:
+        version: latest
+
+    - name: Cache node modules
+      id: node-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.npm
+          ~/.yarn
+          ~/.pnpm-store
+          ${{ inputs.working-directory }}/node_modules
+        key: node-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ steps.detect-pm.outputs.package-manager }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory), format('{0}/yarn.lock', inputs.working-directory), format('{0}/pnpm-lock.yaml', inputs.working-directory)) }}${{ inputs.cache-key-suffix }}
+        restore-keys: |
+          node-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ steps.detect-pm.outputs.package-manager }}-
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        case "${{ steps.detect-pm.outputs.package-manager }}" in
+          yarn)
+            yarn install --frozen-lockfile
+            ;;
+          pnpm)
+            pnpm install --frozen-lockfile
+            ;;
+          *)
+            npm ci
+            ;;
+        esac
+
+    - name: Install development tools
+      if: inputs.install-dev-deps == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        # Install common development tools globally if not present locally
+        if ! npx --no-install typescript --version >/dev/null 2>&1; then
+          npm install -g typescript
+        fi
+        
+        if ! npx --no-install eslint --version >/dev/null 2>&1; then
+          npm install -g eslint
+        fi
+        
+        if ! npx --no-install prettier --version >/dev/null 2>&1; then
+          npm install -g prettier
+        fi
+
+    - name: Display Node.js environment info
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Node.js version: $(node --version)"
+        echo "NPM version: $(npm --version)"
+        
+        case "${{ steps.detect-pm.outputs.package-manager }}" in
+          yarn)
+            echo "Yarn version: $(yarn --version)"
+            ;;
+          pnpm)
+            echo "PNPM version: $(pnpm --version)"
+            ;;
+        esac
+        
+        echo "Package manager: ${{ steps.detect-pm.outputs.package-manager }}"
+        
+        if [ -f "package.json" ]; then
+          echo "Project dependencies:"
+          cat package.json | grep -A 10 '"dependencies"' || echo "No dependencies found"
+        fi

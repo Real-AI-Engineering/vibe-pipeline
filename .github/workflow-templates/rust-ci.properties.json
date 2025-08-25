@@ -1,0 +1,7 @@
+{
+  "name": "Rust CI Pipeline",
+  "description": "Complete CI/CD pipeline for Rust projects with linting, security scanning, testing, and cross-platform building",
+  "iconName": "rust",
+  "categories": ["Rust", "CI", "Testing", "Security"],
+  "filePatterns": ["**/*.rs", "Cargo.toml", "Cargo.lock"]
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Python CI Pipeline",
+  "description": "Complete CI/CD pipeline for Python projects with linting, security scanning, testing, and building",
+  "iconName": "python",
+  "categories": ["Python", "CI", "Testing", "Security"],
+  "filePatterns": ["**/*.py", "requirements*.txt", "pyproject.toml", "setup.py"]
+}

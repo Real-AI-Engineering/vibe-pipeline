@@ -1,0 +1,99 @@
+name: 'Setup Rust Environment'
+description: 'Setup Rust with toolchain, caching, and common development tools'
+author: 'Real AI Engineering'
+
+inputs:
+  rust-version:
+    description: 'Rust version to setup (stable, beta, nightly, or specific version)'
+    required: false
+    default: 'stable'
+  components:
+    description: 'Additional components to install (clippy, rustfmt, etc.)'
+    required: false
+    default: 'clippy,rustfmt'
+  targets:
+    description: 'Additional targets to install'
+    required: false
+    default: ''
+  cache-key-suffix:
+    description: 'Additional suffix for cache key'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory for Rust setup'
+    required: false
+    default: '.'
+  install-tools:
+    description: 'Install common Rust development tools'
+    required: false
+    default: 'true'
+
+outputs:
+  rust-version:
+    description: 'The exact Rust version that was installed'
+    value: ${{ steps.setup-rust.outputs.rustc-version }}
+  cache-hit:
+    description: 'Whether Rust cache was hit'
+    value: ${{ steps.rust-cache.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Rust ${{ inputs.rust-version }}
+      id: setup-rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ inputs.rust-version }}
+        components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
+
+    - name: Cache Rust dependencies
+      id: rust-cache
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: ${{ inputs.working-directory }}
+        cache-on-failure: true
+        key: ${{ inputs.cache-key-suffix }}
+
+    - name: Install Rust development tools
+      if: inputs.install-tools == 'true'
+      shell: bash
+      run: |
+        # Install common Rust development tools
+        cargo install cargo-audit || echo "cargo-audit installation failed"
+        cargo install cargo-outdated || echo "cargo-outdated installation failed"
+        cargo install cargo-edit || echo "cargo-edit installation failed"
+        cargo install cargo-watch || echo "cargo-watch installation failed"
+        cargo install cargo-expand || echo "cargo-expand installation failed"
+        
+        # Security tools
+        cargo install cargo-deny || echo "cargo-deny installation failed"
+        cargo install cargo-geiger || echo "cargo-geiger installation failed"
+
+    - name: Verify Rust installation
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Rust version: $(rustc --version)"
+        echo "Cargo version: $(cargo --version)"
+        
+        # Check components
+        echo "Installed components:"
+        rustup component list --installed
+        
+        # Check targets
+        echo "Installed targets:"
+        rustup target list --installed
+        
+        # Project info if Cargo.toml exists
+        if [ -f "Cargo.toml" ]; then
+          echo "Cargo project info:"
+          cargo metadata --format-version 1 --no-deps | head -20
+          
+          echo "Checking Cargo.toml format:"
+          cargo check --message-format=short --quiet || echo "Cargo check failed"
+        fi
+        
+        # Show toolchain info
+        echo "Active toolchain:"
+        rustup show active-toolchain

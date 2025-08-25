@@ -1,0 +1,35 @@
+name: Docker Build and Publish
+
+on:
+  push:
+    branches: [ main, master ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and push Docker image
+        uses: Real-AI-Engineering/vibe-pipeline/.github/actions/docker-build@main
+        with:
+          image-name: ${{ env.IMAGE_NAME }}
+          registry: ${{ env.REGISTRY }}
+          registry-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          registry-password: ${{ secrets.DOCKERHUB_TOKEN }}
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: 'linux/amd64,linux/arm64'
+          update-description: 'true'
+          readme-filepath: './README.md'

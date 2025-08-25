@@ -1,0 +1,7 @@
+{
+  "name": "Docker Build and Publish",
+  "description": "Build and publish Docker images with multi-platform support, caching, and automated registry publishing",
+  "iconName": "docker",
+  "categories": ["Docker", "CI", "Publishing", "Containers"],
+  "filePatterns": ["Dockerfile", "docker-compose*.yml", ".dockerignore"]
+}
