@@ -1,0 +1,132 @@
+name: 'Docker Build and Push'
+description: 'Build and push Docker images with caching and multi-platform support'
+author: 'Real AI Engineering'
+
+inputs:
+  image-name:
+    description: 'Docker image name (e.g., org/image)'
+    required: true
+  dockerfile-path:
+    description: 'Path to Dockerfile'
+    required: false
+    default: 'Dockerfile'
+  context:
+    description: 'Docker build context'
+    required: false
+    default: '.'
+  platforms:
+    description: 'Target platforms for multi-arch build'
+    required: false
+    default: 'linux/amd64'
+  push:
+    description: 'Whether to push the image'
+    required: false
+    default: 'true'
+  registry:
+    description: 'Docker registry'
+    required: false
+    default: 'docker.io'
+  registry-username:
+    description: 'Registry username'
+    required: false
+    default: ''
+  registry-password:
+    description: 'Registry password/token'
+    required: false
+    default: ''
+  build-args:
+    description: 'Build arguments (newline separated)'
+    required: false
+    default: ''
+  cache-from:
+    description: 'Cache source for build'
+    required: false
+    default: 'type=gha'
+  cache-to:
+    description: 'Cache destination for build'
+    required: false
+    default: 'type=gha,mode=max'
+  tags:
+    description: 'Additional tags (newline separated)'
+    required: false
+    default: ''
+  update-description:
+    description: 'Update Docker Hub description from README'
+    required: false
+    default: 'false'
+  readme-filepath:
+    description: 'Path to README file for description update'
+    required: false
+    default: './README.md'
+
+outputs:
+  image-id:
+    description: 'Image ID of the built image'
+    value: ${{ steps.build.outputs.imageid }}
+  digest:
+    description: 'Image digest'
+    value: ${{ steps.build.outputs.digest }}
+  metadata:
+    description: 'Build result metadata'
+    value: ${{ steps.meta.outputs.json }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to registry
+      if: inputs.push == 'true' && inputs.registry-username != ''
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ inputs.registry }}/${{ inputs.image-name }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value={{date 'YYYYMMDD'}},enable={{is_default_branch}}
+          ${{ inputs.tags }}
+
+    - name: Build and push Docker image
+      id: build
+      uses: docker/build-push-action@v5
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.dockerfile-path }}
+        platforms: ${{ inputs.platforms }}
+        push: ${{ inputs.push }}
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: ${{ inputs.cache-from }}
+        cache-to: ${{ inputs.cache-to }}
+        build-args: ${{ inputs.build-args }}
+
+    - name: Update Docker Hub description
+      if: inputs.update-description == 'true' && inputs.push == 'true' && inputs.registry == 'docker.io'
+      uses: peter-evans/dockerhub-description@v3
+      with:
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
+        repository: ${{ inputs.image-name }}
+        readme-filepath: ${{ inputs.readme-filepath }}
+
+    - name: Display build info
+      shell: bash
+      run: |
+        echo "Docker build completed successfully!"
+        echo "Image: ${{ inputs.registry }}/${{ inputs.image-name }}"
+        echo "Tags: ${{ steps.meta.outputs.tags }}"
+        echo "Image ID: ${{ steps.build.outputs.imageid }}"
+        echo "Digest: ${{ steps.build.outputs.digest }}"
+        echo "Platforms: ${{ inputs.platforms }}"
+        echo "Push: ${{ inputs.push }}"

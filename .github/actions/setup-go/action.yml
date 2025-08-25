@@ -1,0 +1,88 @@
+name: 'Setup Go Environment'
+description: 'Setup Go with caching, modules, and common development tools'
+author: 'Real AI Engineering'
+
+inputs:
+  go-version:
+    description: 'Go version to setup'
+    required: false
+    default: '1.25'
+  cache-key-suffix:
+    description: 'Additional suffix for cache key'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Working directory for Go setup'
+    required: false
+    default: '.'
+  install-tools:
+    description: 'Install common Go development tools'
+    required: false
+    default: 'true'
+
+outputs:
+  go-version:
+    description: 'The exact Go version that was installed'
+    value: ${{ steps.setup-go.outputs.go-version }}
+  cache-hit:
+    description: 'Whether Go modules cache was hit'
+    value: ${{ steps.go-cache.outputs.cache-hit }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go ${{ inputs.go-version }}
+      id: setup-go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+        cache-dependency-path: ${{ inputs.working-directory }}/go.sum
+
+    - name: Cache Go modules
+      id: go-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: go-${{ runner.os }}-${{ steps.setup-go.outputs.go-version }}-${{ hashFiles(format('{0}/go.sum', inputs.working-directory)) }}${{ inputs.cache-key-suffix }}
+        restore-keys: |
+          go-${{ runner.os }}-${{ steps.setup-go.outputs.go-version }}-
+
+    - name: Download Go modules
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        if [ -f "go.mod" ]; then
+          go mod download
+          go mod tidy
+        fi
+
+    - name: Install Go development tools
+      if: inputs.install-tools == 'true'
+      shell: bash
+      run: |
+        # Install common Go tools
+        go install golang.org/x/tools/cmd/goimports@latest
+        go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+        go install github.com/securecodewarrior/sast-scan@latest
+        go install github.com/sonatypecommunity/nancy@latest
+        go install honnef.co/go/tools/cmd/staticcheck@latest
+        go install github.com/kisielk/errcheck@latest
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+
+    - name: Verify Go installation
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        echo "Go version: $(go version)"
+        echo "GOPATH: $(go env GOPATH)"
+        echo "GOROOT: $(go env GOROOT)"
+        echo "GOCACHE: $(go env GOCACHE)"
+        
+        if [ -f "go.mod" ]; then
+          echo "Go module info:"
+          go list -m all | head -10
+          echo "Go module status:"
+          go mod verify
+        fi

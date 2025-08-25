@@ -1,0 +1,75 @@
+name: 'Claude Code Integration'
+description: 'Reusable Claude Code setup with configurable options'
+author: 'Real AI Engineering'
+
+inputs:
+  anthropic-api-key:
+    description: 'Anthropic API key for Claude Code'
+    required: true
+  model:
+    description: 'Claude model to use'
+    required: false
+    default: 'claude-sonnet-4'
+  trigger-phrase:
+    description: 'Phrase to trigger Claude Code'
+    required: false
+    default: '@claude'
+  assignee-trigger:
+    description: 'GitHub username to trigger Claude on assignment'
+    required: false
+    default: ''
+  allowed-tools:
+    description: 'Comma-separated list of allowed tools for Claude'
+    required: false
+    default: ''
+  custom-instructions:
+    description: 'Custom instructions for Claude behavior'
+    required: false
+    default: ''
+  claude-env:
+    description: 'Environment variables for Claude (YAML format)'
+    required: false
+    default: ''
+  additional-permissions:
+    description: 'Additional permissions for Claude'
+    required: false
+    default: 'actions: read'
+
+outputs:
+  claude-response:
+    description: 'Claude response if available'
+    value: ${{ steps.claude.outputs.response }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Run Claude Code
+      id: claude
+      uses: anthropics/claude-code-action@beta
+      with:
+        anthropic_api_key: ${{ inputs.anthropic-api-key }}
+        model: ${{ inputs.model }}
+        trigger_phrase: ${{ inputs.trigger-phrase }}
+        assignee_trigger: ${{ inputs.assignee-trigger }}
+        allowed_tools: ${{ inputs.allowed-tools }}
+        custom_instructions: ${{ inputs.custom-instructions }}
+        claude_env: ${{ inputs.claude-env }}
+        additional_permissions: ${{ inputs.additional-permissions }}
+
+    - name: Display Claude Code info
+      shell: bash
+      run: |
+        echo "Claude Code integration completed"
+        echo "Model used: ${{ inputs.model }}"
+        echo "Trigger phrase: ${{ inputs.trigger-phrase }}"
+        if [ -n "${{ inputs.assignee-trigger }}" ]; then
+          echo "Assignee trigger: ${{ inputs.assignee-trigger }}"
+        fi
+        if [ -n "${{ inputs.allowed-tools }}" ]; then
+          echo "Allowed tools: ${{ inputs.allowed-tools }}"
+        fi

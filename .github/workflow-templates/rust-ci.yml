@@ -1,0 +1,169 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ main, master, develop ]
+    paths:
+      - '**/*.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  pull_request:
+    branches: [ main, master, develop ]
+    paths:
+      - '**/*.rs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: stable
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: Real-AI-Engineering/vibe-pipeline/.github/actions/setup-rust@main
+        with:
+          rust-version: ${{ env.RUST_VERSION }}
+          components: 'clippy,rustfmt'
+          install-tools: 'true'
+
+      - name: Run rustfmt
+        run: |
+          cargo fmt -- --check
+
+      - name: Run clippy
+        run: |
+          cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Check documentation
+        run: |
+          cargo doc --no-deps --document-private-items --all-features
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: Real-AI-Engineering/vibe-pipeline/.github/actions/setup-rust@main
+        with:
+          rust-version: ${{ env.RUST_VERSION }}
+          install-tools: 'true'
+
+      - name: Run cargo-audit
+        run: |
+          cargo audit
+
+      - name: Run cargo-deny
+        run: |
+          cargo deny check
+
+      - name: Run cargo-geiger (unsafe code detection)
+        run: |
+          cargo geiger --update-db || echo "cargo-geiger completed with findings"
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust-version: [stable, beta, nightly]
+        continue-on-error: [false]
+        include:
+          - rust-version: nightly
+            continue-on-error: true
+    continue-on-error: ${{ matrix.continue-on-error }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust ${{ matrix.rust-version }}
+        uses: Real-AI-Engineering/vibe-pipeline/.github/actions/setup-rust@main
+        with:
+          rust-version: ${{ matrix.rust-version }}
+          components: 'llvm-tools-preview'
+
+      - name: Install cargo-llvm-cov
+        run: |
+          cargo install cargo-llvm-cov
+
+      - name: Run tests with coverage
+        run: |
+          cargo llvm-cov --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.rust-version }}
+          path: |
+            lcov.info
+
+      - name: Upload coverage to Codecov
+        if: matrix.rust-version == env.RUST_VERSION
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, security, test]
+    strategy:
+      matrix:
+        target: [x86_64-unknown-linux-gnu, x86_64-pc-windows-gnu, x86_64-apple-darwin, aarch64-unknown-linux-gnu]
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: x86_64-pc-windows-gnu
+            os: ubuntu-latest
+          - target: x86_64-apple-darwin
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: Real-AI-Engineering/vibe-pipeline/.github/actions/setup-rust@main
+        with:
+          rust-version: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'x86_64-pc-windows-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+
+      - name: Build for ${{ matrix.target }}
+        run: |
+          mkdir -p dist
+          cargo build --release --target ${{ matrix.target }}
+          
+          # Copy binary to dist with target suffix
+          binary_name="app-${{ matrix.target }}"
+          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+            binary_name="${binary_name}.exe"
+            cp target/${{ matrix.target }}/release/*.exe "dist/${binary_name}" 2>/dev/null || echo "No .exe files found"
+          else
+            # Find the binary in target directory
+            find target/${{ matrix.target }}/release/ -maxdepth 1 -type f -executable ! -name "*.d" | head -1 | xargs -I {} cp {} "dist/${binary_name}" || echo "No binary found"
+          fi
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-binaries-${{ matrix.target }}
+          path: dist/

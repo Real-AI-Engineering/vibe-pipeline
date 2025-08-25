@@ -1,0 +1,7 @@
+{
+  "name": "Node.js CI Pipeline",
+  "description": "Complete CI/CD pipeline for Node.js projects with linting, security scanning, testing, and building",
+  "iconName": "nodejs",
+  "categories": ["JavaScript", "TypeScript", "Node.js", "CI", "Testing"],
+  "filePatterns": ["**/*.js", "**/*.ts", "**/*.jsx", "**/*.tsx", "package*.json", "yarn.lock", "pnpm-lock.yaml"]
+}
